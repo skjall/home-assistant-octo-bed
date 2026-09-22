@@ -45,6 +45,7 @@ created.
 | Memory position *n* | button | one per stored position the receiver reports |
 | Light | light | only if the receiver has one |
 | Connection | binary sensor | diagnostic, disabled by default; on while a connection is open |
+| Run time up, Run time down, Run time flat or stored position, Step interval, Hang up after | number | configuration, see [Configuration](#configuration) |
 
 The receiver reports neither motor positions nor the light's state. The covers
 therefore show *opening* or *closing* while a movement runs and *unknown*
@@ -63,7 +64,7 @@ otherwise, and the light shows what Home Assistant last switched.
 
 ## Examples
 
-Raise the head end for the configured number of steps:
+Raise the head end for its configured run time:
 
 ```yaml
 action: cover.open_cover
@@ -173,21 +174,20 @@ each entry after the side it drives.
 
 ## Configuration
 
-Under the integration's *Configure*:
+Each bed has its timings as number entities in the *Configuration* section of
+its device page. A change applies from the next movement on; nothing is
+reloaded.
 
-- **Step interval** (default 300 ms) - the time between two steps of a
-  movement. The vendor app sends one every 300 to 350 ms; much longer and the
-  motor stutters.
-- **Steps per movement** (default 50) - how many steps one open or close runs.
-  Steps times interval is the longest a single movement lasts: 15 seconds by
-  default. *Stop* ends it early.
-- **Steps to flat or a stored position** (default 100) - the same for *Flat*
-  and the memory buttons, which need long enough to arrive. The receiver stops
-  on its own once the position is reached.
-- **Hang up after** (default 10 s) - how long the connection stays open after
-  the last command. Shorter frees the proxy's slot sooner; longer saves a
-  reconnect when several commands follow each other.
-- **PIN repeat interval** (default 25 s) - only used when the bed has a PIN.
+| Entity | Default | Meaning |
+| --- | --- | --- |
+| Run time up | 15 s | how long one *open* runs before the bed stops by itself |
+| Run time down | 15 s | the same for *close* |
+| Run time flat or stored position | 30 s | for *Flat* and the memory buttons, which need long enough to arrive; the receiver stops on its own at the position |
+| Step interval | 300 ms | the time between two steps; the vendor app sends one every 300 to 350 ms, and much longer makes the motor stutter |
+| Hang up after | 10 s | how long the connection stays open after the last command; shorter frees the proxy's slot sooner, longer saves a reconnect |
+
+*Stop* ends any movement early. With a PIN set on the bed, the PIN is repeated
+every 25 seconds while a connection is open.
 
 *Reconfigure* asks the bed again which motors, stored positions and light it
 has, and changes the PIN.
@@ -227,11 +227,11 @@ them stays connected, lower *Hang up after*, or give the proxy more slots
 off. Usually range: a proxy in the same room, not behind the bed frame, helps
 more than anything else.
 
-**The bed moves in short jerks.** The step interval is too long for this
+**The bed moves in short jerks.** *Step interval* is too long for this
 receiver. Lower it towards 300 ms.
 
-**The bed stops before it gets there.** Raise *Steps per movement* or *Steps
-to flat or a stored position*.
+**The bed stops before it gets there.** Raise *Run time up*, *Run time down*
+or *Run time flat or stored position*.
 
 **Everything worked, now the PIN is refused.** The PIN was changed in the app.
 Home Assistant asks for the new one.

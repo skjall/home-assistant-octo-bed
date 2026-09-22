@@ -22,16 +22,17 @@ from octo_bed_protocol import (
 __all__ = [
     "ADVERTISED_SERVICE_UUID",
     "CHAR_UUID",
+    "CONF_DOWN_TIME",
     "CONF_FEATURES",
     "CONF_IDLE_TIMEOUT",
-    "CONF_KEEPALIVE_INTERVAL",
-    "CONF_MOVE_STEPS",
+    "CONF_LISTING",
     "CONF_PIN",
-    "CONF_POSITION_STEPS",
+    "CONF_POSITION_TIME",
     "CONF_STEP_INTERVAL",
+    "CONF_UP_TIME",
     "DEFAULTS",
     "DOMAIN",
-    "LIMITS",
+    "KEEPALIVE_INTERVAL",
     "MANUFACTURER",
     "MOTOR_3",
     "MOTOR_4",
@@ -46,36 +47,32 @@ DOMAIN: Final = "octo_bed"
 CONF_PIN: Final = "pin"
 # What the receiver said about itself during setup: motors, memories, light.
 CONF_FEATURES: Final = "features"
+# The notifications that listing arrived in, as hex, for the diagnostics.
+CONF_LISTING: Final = "listing"
 
 # How a movement is driven. The receiver runs a motor only while the command
-# keeps arriving, so a movement is a number of steps at a fixed interval,
-# followed by a stop.
+# keeps arriving, so a movement is a step every STEP_INTERVAL for as long as
+# its run time lasts, followed by a stop. Run times are in seconds, per
+# direction; the number of steps follows from them.
 CONF_STEP_INTERVAL: Final = "step_interval"
-CONF_MOVE_STEPS: Final = "move_steps"
-CONF_POSITION_STEPS: Final = "position_steps"
+CONF_UP_TIME: Final = "up_time"
+CONF_DOWN_TIME: Final = "down_time"
+CONF_POSITION_TIME: Final = "position_time"
 # How long a connection is kept open after the last command. The proxy has only
 # a handful of connection slots, and a bed that holds one keeps it from every
 # other device.
 CONF_IDLE_TIMEOUT: Final = "idle_timeout"
+
 # How often the PIN is repeated while a connection is open. A locked receiver
 # drops the link after about 30 seconds without it.
-CONF_KEEPALIVE_INTERVAL: Final = "keepalive_interval"
+KEEPALIVE_INTERVAL: Final = 25.0
 
 # The vendor app repeats a held button every 300 to 350 ms, and the ESPHome
-# setup this replaces ran 50 steps at 300 ms.
-DEFAULTS: Final[dict[str, int]] = {
+# setup this replaces ran 50 steps at 300 ms: 15 seconds.
+DEFAULTS: Final[dict[str, float]] = {
     CONF_STEP_INTERVAL: 300,
-    CONF_MOVE_STEPS: 50,
-    CONF_POSITION_STEPS: 100,
+    CONF_UP_TIME: 15,
+    CONF_DOWN_TIME: 15,
+    CONF_POSITION_TIME: 30,
     CONF_IDLE_TIMEOUT: 10,
-    CONF_KEEPALIVE_INTERVAL: 25,
-}
-
-LIMITS: Final[dict[str, tuple[int, int, int]]] = {
-    # minimum, maximum, step
-    CONF_STEP_INTERVAL: (100, 1000, 10),
-    CONF_MOVE_STEPS: (1, 1000, 1),
-    CONF_POSITION_STEPS: (1, 1000, 1),
-    CONF_IDLE_TIMEOUT: (1, 300, 1),
-    CONF_KEEPALIVE_INTERVAL: (5, 28, 1),
 }

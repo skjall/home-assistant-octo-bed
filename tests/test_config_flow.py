@@ -20,16 +20,12 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.octo_bed.config_flow import is_octo, suggested_title
 from custom_components.octo_bed.const import (
     CONF_FEATURES,
-    CONF_IDLE_TIMEOUT,
-    CONF_KEEPALIVE_INTERVAL,
-    CONF_MOVE_STEPS,
+    CONF_LISTING,
     CONF_PIN,
-    CONF_POSITION_STEPS,
-    CONF_STEP_INTERVAL,
     DOMAIN,
     SERVICE_UUID,
 )
-from custom_components.octo_bed.coordinator import PinRejectedError
+from custom_components.octo_bed.coordinator import PinRejectedError, Probe
 
 from .conftest import ADDRESS, PIN, make_service_info
 
@@ -37,9 +33,12 @@ PROBE = "custom_components.octo_bed.config_flow.async_probe"
 DISCOVERED = "custom_components.octo_bed.config_flow.async_discovered_service_info"
 
 
-def features(pin_set: bool = False, motors: int = 2, light: bool = True):
-    return protocol.Features(
-        motor_count=motors, has_light=light, pin_set=pin_set, complete=True
+def features(pin_set: bool = False, motors: int = 2, light: bool = True) -> Probe:
+    return Probe(
+        features=protocol.Features(
+            motor_count=motors, has_light=light, pin_set=pin_set, complete=True
+        ),
+        received=[bytes.fromhex("40 21 71")],
     )
 
 
@@ -66,6 +65,8 @@ async def test_discovery_without_a_pin(
     assert result["data"][CONF_ADDRESS] == ADDRESS
     assert CONF_PIN not in result["data"]
     assert result["data"][CONF_FEATURES]["motor_count"] == 2
+    # The raw listing travels with the entry, for the diagnostics.
+    assert result["data"][CONF_LISTING] == ["40 21 71"]
 
 
 async def test_discovery_with_a_pin(
@@ -248,26 +249,6 @@ async def test_reconfigure_a_bed_without_a_pin(
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["reason"] == "reconfigure_successful"
     assert CONF_PIN not in mock_config_entry.data
-
-
-async def test_options(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> None:
-    """The timings are stored as whole numbers."""
-    mock_config_entry.add_to_hass(hass)
-    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
-    assert result["step_id"] == "init"
-    values = {
-        CONF_STEP_INTERVAL: 350.0,
-        CONF_MOVE_STEPS: 40.0,
-        CONF_POSITION_STEPS: 120.0,
-        CONF_IDLE_TIMEOUT: 5.0,
-        CONF_KEEPALIVE_INTERVAL: 20.0,
-    }
-    with patch("custom_components.octo_bed.async_setup_entry", return_value=True):
-        result = await hass.config_entries.options.async_configure(
-            result["flow_id"], values
-        )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert mock_config_entry.options[CONF_STEP_INTERVAL] == 350
 
 
 def test_titles_and_recognition() -> None:

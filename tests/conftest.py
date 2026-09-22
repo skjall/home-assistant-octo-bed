@@ -14,12 +14,14 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.octo_bed.const import (
     ADVERTISED_SERVICE_UUID,
+    CONF_DOWN_TIME,
     CONF_FEATURES,
     CONF_IDLE_TIMEOUT,
-    CONF_MOVE_STEPS,
+    CONF_LISTING,
     CONF_PIN,
-    CONF_POSITION_STEPS,
+    CONF_POSITION_TIME,
     CONF_STEP_INTERVAL,
+    CONF_UP_TIME,
     DOMAIN,
     SERVICE_UUID,
 )
@@ -39,8 +41,9 @@ FEATURES = {
 # Short enough that a whole movement fits into a test.
 FAST = {
     CONF_STEP_INTERVAL: 100,
-    CONF_MOVE_STEPS: 3,
-    CONF_POSITION_STEPS: 4,
+    CONF_UP_TIME: 0.3,
+    CONF_DOWN_TIME: 0.3,
+    CONF_POSITION_TIME: 0.4,
     CONF_IDLE_TIMEOUT: 1,
 }
 
@@ -117,7 +120,12 @@ def mock_config_entry() -> MockConfigEntry:
         domain=DOMAIN,
         title="Bed",
         unique_id=ADDRESS,
-        data={CONF_ADDRESS: ADDRESS, CONF_PIN: PIN, CONF_FEATURES: dict(FEATURES)},
+        data={
+            CONF_ADDRESS: ADDRESS,
+            CONF_PIN: PIN,
+            CONF_FEATURES: dict(FEATURES),
+            CONF_LISTING: [],
+        },
         options=dict(FAST),
     )
 

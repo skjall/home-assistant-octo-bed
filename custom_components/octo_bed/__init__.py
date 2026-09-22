@@ -2,14 +2,27 @@
 
 from __future__ import annotations
 
+import octo_bed_protocol as protocol
+from bleak.exc import BleakError
 from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS, EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import Event, HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    ConfigEntryNotReady,
+    HomeAssistantError,
+)
 
-from .const import CONF_FEATURES, CONF_PIN, DOMAIN
-from .coordinator import OctoBedCoordinator, Timings, features_from_data
+from .const import CONF_FEATURES, CONF_LISTING, CONF_PIN, DOMAIN
+from .coordinator import (
+    OctoBedCoordinator,
+    PinRejectedError,
+    Timings,
+    async_probe,
+    features_from_data,
+    features_to_data,
+)
 
 type OctoBedConfigEntry = ConfigEntry[OctoBedCoordinator]
 
@@ -18,6 +31,7 @@ PLATFORMS: list[Platform] = [
     Platform.BUTTON,
     Platform.COVER,
     Platform.LIGHT,
+    Platform.NUMBER,
 ]
 
 
@@ -40,12 +54,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: OctoBedConfigEntry) -> b
             translation_placeholders={"address": address},
         )
 
+    if CONF_LISTING not in entry.data:
+        await _async_read_features_again(hass, entry)
+
     coordinator = OctoBedCoordinator(
         hass,
         entry,
         address,
         entry.data.get(CONF_PIN),
-        features_from_data(entry.data[CONF_FEATURES]),
+        _features(hass, entry),
         Timings.from_options(entry.options),
     )
     entry.runtime_data = coordinator
@@ -54,7 +71,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: OctoBedConfigEntry) -> b
     # Only start once every platform has had its chance to subscribe.
     entry.async_on_unload(coordinator.async_start())
     entry.async_on_unload(coordinator.async_shutdown)
-    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     async def _async_stop(_: Event) -> None:
         await coordinator.async_shutdown()
@@ -65,11 +81,56 @@ async def async_setup_entry(hass: HomeAssistant, entry: OctoBedConfigEntry) -> b
     return True
 
 
-async def _async_options_updated(
+def _features(hass: HomeAssistant, entry: OctoBedConfigEntry) -> protocol.Features:
+    """Read the features from the listing the bed sent, every time.
+
+    The listing is what the bed said; the features are only one reading of
+    it. Reading it again at each start means a corrected parser reaches every
+    existing entry without connecting to the bed or setting it up again.
+    """
+    listing = [bytes.fromhex(chunk) for chunk in entry.data[CONF_LISTING]]
+    if not listing:
+        return features_from_data(entry.data[CONF_FEATURES])
+    features = protocol.read_listing(listing)
+    if (data := features_to_data(features)) != entry.data[CONF_FEATURES]:
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_FEATURES: data}
+        )
+    return features
+
+
+async def _async_read_features_again(
     hass: HomeAssistant, entry: OctoBedConfigEntry
 ) -> None:
-    """Reload so the new timings take effect."""
-    await hass.config_entries.async_reload(entry.entry_id)
+    """Read the features of an entry that was set up by an older reader.
+
+    Before the raw listing was stored with the entry, the reader cut frames
+    at every 0x40 and lost each record that contained one - on an RC2 the
+    motor count. Such an entry has no listing, and its features are read once
+    more: one short connection, closed again straight away.
+    """
+    try:
+        probe = await async_probe(
+            hass, entry.data[CONF_ADDRESS], entry.title, entry.data.get(CONF_PIN)
+        )
+    except PinRejectedError as err:
+        raise ConfigEntryAuthFailed(
+            translation_domain=DOMAIN, translation_key="invalid_pin"
+        ) from err
+    except (HomeAssistantError, TimeoutError, BleakError) as err:
+        raise ConfigEntryNotReady(
+            translation_domain=DOMAIN,
+            translation_key="features_unread",
+            translation_placeholders={"name": entry.title},
+        ) from err
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            **entry.data,
+            CONF_FEATURES: features_to_data(probe.features),
+            CONF_LISTING: [chunk.hex(" ") for chunk in probe.received],
+        },
+    )
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: OctoBedConfigEntry) -> bool:
