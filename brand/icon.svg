@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Ground: the house colour, edge to edge. -->
+  <rect width="512" height="512" fill="#0A7EE8"/>
+
+  <!-- Bluetooth: the rune in white, the radio waves in the medium colour. -->
+  <path d="M306 128 L398 204 L352 242 L352 90 L398 128 L306 204"
+        fill="none" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M424 138 A40 40 0 0 1 424 196" fill="none" stroke="#9FE2FC" stroke-width="14" stroke-linecap="round"/>
+  <path d="M446 118 A68 68 0 0 1 446 216" fill="none" stroke="#9FE2FC" stroke-width="14" stroke-linecap="round"/>
+
+  <!-- The bed: frame and legs. -->
+  <path d="M84 402 L432 402" fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round"/>
+  <path d="M112 402 L112 440 M404 402 L404 440" fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round"/>
+
+  <!-- Mattress: the leg section flat, the head section raised. -->
+  <path d="M104 262 L208 338 L420 338" fill="none" stroke="#FFFFFF" stroke-width="64"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- The top surface, seen slightly from above: a cutout in the ground colour. -->
+  <path d="M118 262 L212 331 L412 331" fill="none" stroke="#0A7EE8" stroke-width="7"
+        stroke-linecap="round" stroke-linejoin="round" transform="translate(0 -12)"/>
+
+  <!-- Pillow on the raised head section, set off by a ground-colour gap. -->
+  <g transform="translate(10 12) rotate(36.2 110 214)">
+    <rect x="68" y="186" width="92" height="44" rx="20" fill="#FFFFFF" stroke="#0A7EE8" stroke-width="8"/>
+  </g>
+</svg>

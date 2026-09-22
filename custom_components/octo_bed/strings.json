@@ -1,0 +1,145 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Add an Octo bed",
+        "description": "One entry per receiver. A bed frame with two sides has two.",
+        "data": {
+          "address": "Bed"
+        },
+        "data_description": {
+          "address": "Receivers in range that speak the Octo protocol."
+        }
+      },
+      "bluetooth_confirm": {
+        "title": "Add an Octo bed",
+        "description": "Set up {name}? Home Assistant connects once to ask the bed what it has."
+      },
+      "pin": {
+        "title": "PIN",
+        "description": "{name} has a PIN set.",
+        "data": {
+          "pin": "PIN"
+        },
+        "data_description": {
+          "pin": "The four-digit PIN set in the Octo app."
+        }
+      },
+      "reauth_confirm": {
+        "title": "PIN rejected",
+        "description": "{name} no longer accepts the stored PIN.",
+        "data": {
+          "pin": "PIN"
+        },
+        "data_description": {
+          "pin": "The four-digit PIN set in the Octo app."
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure {name}",
+        "description": "Asks the bed again which motors, stored positions and light it has, and creates the entities to match.",
+        "data": {
+          "pin": "PIN"
+        },
+        "data_description": {
+          "pin": "Only needed if the bed has a PIN set."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not connect to the bed. It accepts one connection at a time - is the vendor app or another controller connected?",
+      "not_in_range": "No Bluetooth adapter or proxy hears the bed right now.",
+      "no_free_slot": "Every adapter that hears the bed is out of connection slots.",
+      "no_features": "The bed did not say which motors it has.",
+      "invalid_pin": "The bed rejected the PIN.",
+      "invalid_pin_format": "The PIN is four digits.",
+      "pin_required": "The bed has a PIN set. Enter it."
+    },
+    "abort": {
+      "already_configured": "This bed is already set up.",
+      "no_devices_found": "No Octo bed in range.",
+      "not_supported": "This device does not speak the Octo protocol.",
+      "reauth_successful": "The PIN has been updated.",
+      "reconfigure_successful": "The bed has been read again."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Timings",
+        "data": {
+          "step_interval": "Step interval",
+          "move_steps": "Steps per movement",
+          "position_steps": "Steps to flat or a stored position",
+          "idle_timeout": "Hang up after",
+          "keepalive_interval": "PIN repeat interval"
+        },
+        "data_description": {
+          "step_interval": "Milliseconds between two steps. The bed only moves while steps keep arriving; the vendor app sends one every 300 to 350 ms.",
+          "move_steps": "How many steps one open or close runs before the bed stops by itself. Steps times interval is the longest a movement lasts.",
+          "position_steps": "The same for Flat and the stored positions, which need long enough to arrive.",
+          "idle_timeout": "Seconds without a command before the connection is closed. It frees the proxy's connection slot for other devices.",
+          "keepalive_interval": "Seconds between two PINs while connected. A locked bed drops the link after about 30 seconds without one."
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "connection": {
+        "name": "Connection"
+      }
+    },
+    "button": {
+      "stop": {
+        "name": "Stop"
+      },
+      "flat": {
+        "name": "Flat"
+      },
+      "memory": {
+        "name": "Memory position {slot}"
+      }
+    },
+    "cover": {
+      "head": {
+        "name": "Head"
+      },
+      "feet": {
+        "name": "Feet"
+      },
+      "motor_3": {
+        "name": "Motor 3"
+      },
+      "motor_4": {
+        "name": "Motor 4"
+      },
+      "all_motors": {
+        "name": "All motors"
+      }
+    },
+    "light": {
+      "light": {
+        "name": "Light"
+      }
+    }
+  },
+  "exceptions": {
+    "no_scanner": {
+      "message": "No connectable Bluetooth adapter or proxy is set up."
+    },
+    "not_in_range": {
+      "message": "No Bluetooth adapter or proxy hears {address} right now."
+    },
+    "no_free_slot": {
+      "message": "No free connection slot on {adapters}."
+    },
+    "invalid_pin": {
+      "message": "The bed rejected the PIN."
+    },
+    "command_failed": {
+      "message": "{name} did not take the command."
+    }
+  }
+}

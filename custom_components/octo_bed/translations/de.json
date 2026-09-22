@@ -1,0 +1,145 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "title": "Octo-Bett hinzufügen",
+        "description": "Ein Eintrag je Empfänger. Ein Bettgestell mit zwei Seiten hat zwei.",
+        "data": {
+          "address": "Bett"
+        },
+        "data_description": {
+          "address": "Empfänger in Reichweite, die das Octo-Protokoll sprechen."
+        }
+      },
+      "bluetooth_confirm": {
+        "title": "Octo-Bett hinzufügen",
+        "description": "{name} einrichten? Home Assistant verbindet sich einmal und fragt das Bett, was es hat."
+      },
+      "pin": {
+        "title": "PIN",
+        "description": "An {name} ist eine PIN gesetzt.",
+        "data": {
+          "pin": "PIN"
+        },
+        "data_description": {
+          "pin": "Die vierstellige PIN aus der Octo-App."
+        }
+      },
+      "reauth_confirm": {
+        "title": "PIN abgelehnt",
+        "description": "{name} nimmt die gespeicherte PIN nicht mehr an.",
+        "data": {
+          "pin": "PIN"
+        },
+        "data_description": {
+          "pin": "Die vierstellige PIN aus der Octo-App."
+        }
+      },
+      "reconfigure": {
+        "title": "{name} neu einrichten",
+        "description": "Fragt das Bett erneut nach Motoren, Speicherpositionen und Licht und legt die passenden Entitäten an.",
+        "data": {
+          "pin": "PIN"
+        },
+        "data_description": {
+          "pin": "Nur nötig, wenn am Bett eine PIN gesetzt ist."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Keine Verbindung zum Bett. Es nimmt nur eine Verbindung gleichzeitig an - ist die Hersteller-App oder eine andere Steuerung verbunden?",
+      "not_in_range": "Gerade hört kein Bluetooth-Adapter und kein Proxy das Bett.",
+      "no_free_slot": "Jeder Adapter, der das Bett hört, hat keinen freien Verbindungsplatz.",
+      "no_features": "Das Bett hat nicht gemeldet, welche Motoren es hat.",
+      "invalid_pin": "Das Bett hat die PIN abgelehnt.",
+      "invalid_pin_format": "Die PIN hat vier Ziffern.",
+      "pin_required": "Am Bett ist eine PIN gesetzt. Bitte eingeben."
+    },
+    "abort": {
+      "already_configured": "Dieses Bett ist bereits eingerichtet.",
+      "no_devices_found": "Kein Octo-Bett in Reichweite.",
+      "not_supported": "Dieses Gerät spricht nicht das Octo-Protokoll.",
+      "reauth_successful": "Die PIN wurde aktualisiert.",
+      "reconfigure_successful": "Das Bett wurde neu eingelesen."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Zeiten",
+        "data": {
+          "step_interval": "Schrittabstand",
+          "move_steps": "Schritte pro Bewegung",
+          "position_steps": "Schritte bis flach oder zur Speicherposition",
+          "idle_timeout": "Trennen nach",
+          "keepalive_interval": "PIN-Wiederholung"
+        },
+        "data_description": {
+          "step_interval": "Millisekunden zwischen zwei Schritten. Das Bett bewegt sich nur, solange Schritte ankommen; die Hersteller-App sendet alle 300 bis 350 ms.",
+          "move_steps": "Wie viele Schritte ein Hoch oder Runter fährt, bevor das Bett von selbst anhält. Schritte mal Abstand ist die längste Fahrzeit.",
+          "position_steps": "Dasselbe für Flach und die Speicherpositionen, die lange genug laufen müssen, um anzukommen.",
+          "idle_timeout": "Sekunden ohne Befehl, bis die Verbindung getrennt wird. Das gibt den Verbindungsplatz im Proxy für andere Geräte frei.",
+          "keepalive_interval": "Sekunden zwischen zwei PINs, solange verbunden. Ein gesperrtes Bett trennt nach etwa 30 Sekunden ohne PIN."
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "connection": {
+        "name": "Verbindung"
+      }
+    },
+    "button": {
+      "stop": {
+        "name": "Stop"
+      },
+      "flat": {
+        "name": "Flach"
+      },
+      "memory": {
+        "name": "Speicherposition {slot}"
+      }
+    },
+    "cover": {
+      "head": {
+        "name": "Kopf"
+      },
+      "feet": {
+        "name": "Füße"
+      },
+      "motor_3": {
+        "name": "Motor 3"
+      },
+      "motor_4": {
+        "name": "Motor 4"
+      },
+      "all_motors": {
+        "name": "Alle Motoren"
+      }
+    },
+    "light": {
+      "light": {
+        "name": "Licht"
+      }
+    }
+  },
+  "exceptions": {
+    "no_scanner": {
+      "message": "Kein verbindungsfähiger Bluetooth-Adapter oder Proxy eingerichtet."
+    },
+    "not_in_range": {
+      "message": "Gerade hört kein Bluetooth-Adapter und kein Proxy {address}."
+    },
+    "no_free_slot": {
+      "message": "Kein freier Verbindungsplatz auf {adapters}."
+    },
+    "invalid_pin": {
+      "message": "Das Bett hat die PIN abgelehnt."
+    },
+    "command_failed": {
+      "message": "{name} hat den Befehl nicht angenommen."
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "connection": {
+        "default": "mdi:bluetooth-off",
+        "state": {
+          "on": "mdi:bluetooth-connect"
+        }
+      }
+    },
+    "button": {
+      "stop": {
+        "default": "mdi:stop"
+      },
+      "flat": {
+        "default": "mdi:bed-empty"
+      },
+      "memory": {
+        "default": "mdi:numeric"
+      }
+    },
+    "cover": {
+      "head": {
+        "default": "mdi:bed-outline"
+      },
+      "feet": {
+        "default": "mdi:foot-print"
+      },
+      "motor_3": {
+        "default": "mdi:engine-outline"
+      },
+      "motor_4": {
+        "default": "mdi:engine-outline"
+      },
+      "all_motors": {
+        "default": "mdi:bed"
+      }
+    },
+    "light": {
+      "light": {
+        "default": "mdi:lightbulb-outline",
+        "state": {
+          "on": "mdi:lightbulb-on"
+        }
+      }
+    }
+  }
+}

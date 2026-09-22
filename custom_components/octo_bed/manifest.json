@@ -1,0 +1,92 @@
+{
+  "domain": "octo_bed",
+  "name": "Octo Bed (BLE)",
+  "bluetooth": [
+    {
+      "service_uuid": "58debc00-4083-4735-8926-6721a778ae5e",
+      "connectable": true
+    },
+    {
+      "service_uuid": "0000ffe0-0000-1000-8000-00805f9b34fb",
+      "local_name": "RC2*",
+      "connectable": true
+    },
+    {
+      "service_uuid": "0000ffe0-0000-1000-8000-00805f9b34fb",
+      "local_name": "RC3*",
+      "connectable": true
+    },
+    {
+      "service_uuid": "0000ffe0-0000-1000-8000-00805f9b34fb",
+      "local_name": "MC1*",
+      "connectable": true
+    },
+    {
+      "service_uuid": "0000ffe0-0000-1000-8000-00805f9b34fb",
+      "local_name": "MC2*",
+      "connectable": true
+    },
+    {
+      "service_uuid": "0000ffe0-0000-1000-8000-00805f9b34fb",
+      "local_name": "RTV*",
+      "connectable": true
+    },
+    {
+      "service_uuid": "0000ffe0-0000-1000-8000-00805f9b34fb",
+      "local_name": "L2M*",
+      "connectable": true
+    },
+    {
+      "service_uuid": "0000ffe0-0000-1000-8000-00805f9b34fb",
+      "local_name": "CLI*",
+      "connectable": true
+    },
+    {
+      "service_uuid": "0000ffe0-0000-1000-8000-00805f9b34fb",
+      "local_name": "BMB*",
+      "connectable": true
+    },
+    {
+      "service_uuid": "0000ffe0-0000-1000-8000-00805f9b34fb",
+      "local_name": "BMS*",
+      "connectable": true
+    },
+    {
+      "service_uuid": "0000ffe0-0000-1000-8000-00805f9b34fb",
+      "local_name": "BM3*",
+      "connectable": true
+    },
+    {
+      "service_uuid": "0000ffe0-0000-1000-8000-00805f9b34fb",
+      "local_name": "OCTOBRICK*",
+      "connectable": true
+    },
+    {
+      "service_uuid": "0000ffe0-0000-1000-8000-00805f9b34fb",
+      "local_name": "OCTOIQ*",
+      "connectable": true
+    }
+  ],
+  "codeowners": [
+    "@skjall"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "bluetooth_adapters"
+  ],
+  "documentation": "https://github.com/skjall/home-assistant-octo-bed",
+  "integration_type": "device",
+  "iot_class": "assumed_state",
+  "issue_tracker": "https://github.com/skjall/home-assistant-octo-bed/issues",
+  "loggers": [
+    "bleak",
+    "bleak_retry_connector",
+    "octo_bed_protocol"
+  ],
+  "quality_scale": "custom",
+  "requirements": [
+    "bleak-retry-connector>=3.5.0",
+    "octo-bed-protocol==0.1.0"
+  ],
+  "version": "0.1.0"
+}
