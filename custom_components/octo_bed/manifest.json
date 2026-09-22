@@ -86,7 +86,7 @@
   "quality_scale": "custom",
   "requirements": [
     "bleak-retry-connector>=3.5.0",
-    "octo-bed-protocol==0.1.0"
+    "octo-bed-protocol==0.2.0"
   ],
-  "version": "0.1.0"
+  "version": "0.2.0"
 }
