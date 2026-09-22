@@ -64,27 +64,6 @@
       "reconfigure_successful": "Das Bett wurde neu eingelesen."
     }
   },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Zeiten",
-        "data": {
-          "step_interval": "Schrittabstand",
-          "move_steps": "Schritte pro Bewegung",
-          "position_steps": "Schritte bis flach oder zur Speicherposition",
-          "idle_timeout": "Trennen nach",
-          "keepalive_interval": "PIN-Wiederholung"
-        },
-        "data_description": {
-          "step_interval": "Millisekunden zwischen zwei Schritten. Das Bett bewegt sich nur, solange Schritte ankommen; die Hersteller-App sendet alle 300 bis 350 ms.",
-          "move_steps": "Wie viele Schritte ein Hoch oder Runter fährt, bevor das Bett von selbst anhält. Schritte mal Abstand ist die längste Fahrzeit.",
-          "position_steps": "Dasselbe für Flach und die Speicherpositionen, die lange genug laufen müssen, um anzukommen.",
-          "idle_timeout": "Sekunden ohne Befehl, bis die Verbindung getrennt wird. Das gibt den Verbindungsplatz im Proxy für andere Geräte frei.",
-          "keepalive_interval": "Sekunden zwischen zwei PINs, solange verbunden. Ein gesperrtes Bett trennt nach etwa 30 Sekunden ohne PIN."
-        }
-      }
-    }
-  },
   "entity": {
     "binary_sensor": {
       "connection": {
@@ -123,6 +102,23 @@
       "light": {
         "name": "Licht"
       }
+    },
+    "number": {
+      "up_time": {
+        "name": "Fahrzeit hoch"
+      },
+      "down_time": {
+        "name": "Fahrzeit runter"
+      },
+      "position_time": {
+        "name": "Fahrzeit Flach/Speicher"
+      },
+      "step_interval": {
+        "name": "Schrittabstand"
+      },
+      "idle_timeout": {
+        "name": "Trennen nach"
+      }
     }
   },
   "exceptions": {
@@ -140,6 +136,9 @@
     },
     "command_failed": {
       "message": "{name} hat den Befehl nicht angenommen."
+    },
+    "features_unread": {
+      "message": "{name} hat Motoren und Licht nicht gemeldet. Neuer Versuch folgt."
     }
   }
 }

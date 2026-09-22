@@ -4,16 +4,21 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import octo_bed_protocol as protocol
+from bleak.exc import BleakError
 from homeassistant.components.bluetooth import BluetoothChange
-from homeassistant.config_entries import ConfigEntryState
+from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.octo_bed.const import CONF_FEATURES, CONF_MOVE_STEPS
+from custom_components.octo_bed.const import (
+    CONF_FEATURES,
+    CONF_LISTING,
+)
 
-from .conftest import make_service_info
+from .conftest import PIN, PIN_WRONG, FakeBed, make_service_info
 
 INIT = "custom_components.octo_bed.bluetooth"
 
@@ -26,6 +31,8 @@ async def _setup(hass: HomeAssistant, entry: MockConfigEntry) -> None:
     ):
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
+    if entry.state is not ConfigEntryState.LOADED:
+        return
     # One advertisement, as the bed sends them all the time.
     entry.runtime_data._async_handle_bluetooth_event(
         make_service_info(), BluetoothChange.ADVERTISEMENT
@@ -47,13 +54,18 @@ async def test_setup_creates_what_the_bed_has(
     assert keys == [
         "all_motors",
         "connection",
+        "down_time",
         "feet",
         "flat",
         "head",
+        "idle_timeout",
         "light",
         "memory_1",
         "memory_2",
+        "position_time",
+        "step_interval",
         "stop",
+        "up_time",
     ]
 
     assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
@@ -106,22 +118,6 @@ async def test_setup_waits_for_the_bed(
     assert mock_config_entry.state is ConfigEntryState.SETUP_RETRY
 
 
-async def test_new_options_reload(
-    hass: HomeAssistant, bluetooth_ready: None, mock_config_entry: MockConfigEntry
-) -> None:
-    """Changed timings take effect without a restart."""
-    await _setup(hass, mock_config_entry)
-    with (
-        patch(f"{INIT}.async_scanner_count", return_value=1),
-        patch(f"{INIT}.async_address_present", return_value=True),
-    ):
-        hass.config_entries.async_update_entry(
-            mock_config_entry, options={CONF_MOVE_STEPS: 7}
-        )
-        await hass.async_block_till_done()
-    assert mock_config_entry.runtime_data.timings.move_steps == 7
-
-
 async def test_shutdown_hangs_up(
     hass: HomeAssistant, bluetooth_ready: None, mock_config_entry: MockConfigEntry
 ) -> None:
@@ -131,3 +127,90 @@ async def test_shutdown_hangs_up(
         hass.bus.async_fire(EVENT_HOMEASSISTANT_STOP)
         await hass.async_block_till_done()
     shutdown.assert_awaited()
+
+
+def _old_entry(entry: MockConfigEntry) -> MockConfigEntry:
+    """An entry from before the listing was stored: motors lost."""
+    data = {k: v for k, v in entry.data.items() if k != CONF_LISTING}
+    data[CONF_FEATURES] = {**data[CONF_FEATURES], "motor_count": None}
+    return MockConfigEntry(
+        domain=entry.domain, title="Bed", unique_id=entry.unique_id, data=data
+    )
+
+
+async def test_an_old_entry_reads_its_features_again(
+    hass: HomeAssistant,
+    bluetooth_ready: None,
+    mock_config_entry: MockConfigEntry,
+    bed: FakeBed,
+) -> None:
+    """Once, at setup, and the motors appear."""
+    entry = _old_entry(mock_config_entry)
+    await _setup(hass, entry)
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.data[CONF_FEATURES]["motor_count"] == 2
+    assert entry.data[CONF_LISTING]
+    assert hass.states.get("cover.bed_head") is not None
+    assert bed.written == [protocol.request_features(), protocol.pin(PIN)]
+    bed.client.disconnect.assert_awaited()
+    await entry.runtime_data.async_shutdown()
+
+
+async def test_an_old_entry_waits_when_the_bed_is_unreachable(
+    hass: HomeAssistant,
+    bluetooth_ready: None,
+    mock_config_entry: MockConfigEntry,
+    bed: FakeBed,
+) -> None:
+    """No answer means retry later, not an entry without motors."""
+    entry = _old_entry(mock_config_entry)
+    with patch(
+        "custom_components.octo_bed.coordinator.establish_connection",
+        side_effect=BleakError("busy"),
+    ):
+        await _setup(hass, entry)
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    assert CONF_LISTING not in entry.data
+
+
+async def test_an_old_entry_with_a_wrong_pin(
+    hass: HomeAssistant,
+    bluetooth_ready: None,
+    mock_config_entry: MockConfigEntry,
+    bed: FakeBed,
+) -> None:
+    """A PIN the bed refuses asks for a new one."""
+    bed.replies[protocol.pin(PIN)] = PIN_WRONG
+    entry = _old_entry(mock_config_entry)
+    await _setup(hass, entry)
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+    assert any(
+        flow["context"]["source"] == SOURCE_REAUTH
+        for flow in hass.config_entries.flow.async_progress()
+    )
+
+
+async def test_features_come_from_the_stored_listing(
+    hass: HomeAssistant,
+    bluetooth_ready: None,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """A parser that learned better fixes an entry without a new connection."""
+    rc2 = [
+        "40 21 71 00 07 e2 00 00 01 01 01 02 00 40",
+        "40 21 71 00 08 df 00 01 02 01 01 01 01 00 40",
+        "40 21 71 00 06 ea ff ff ff 01 00 00 40",
+    ]
+    stale = {**mock_config_entry.data[CONF_FEATURES], "motor_count": None}
+    entry = MockConfigEntry(
+        domain=mock_config_entry.domain,
+        title="Bed",
+        unique_id=mock_config_entry.unique_id,
+        data={**mock_config_entry.data, CONF_FEATURES: stale, CONF_LISTING: rc2},
+    )
+    await _setup(hass, entry)
+    assert entry.data[CONF_FEATURES]["motor_count"] == 2
+    assert hass.states.get("cover.bed_head") is not None
+    assert hass.states.get("cover.bed_feet") is not None
+    assert hass.states.get("cover.bed_all_motors") is not None
+    await entry.runtime_data.async_shutdown()

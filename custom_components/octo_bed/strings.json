@@ -64,27 +64,6 @@
       "reconfigure_successful": "The bed has been read again."
     }
   },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Timings",
-        "data": {
-          "step_interval": "Step interval",
-          "move_steps": "Steps per movement",
-          "position_steps": "Steps to flat or a stored position",
-          "idle_timeout": "Hang up after",
-          "keepalive_interval": "PIN repeat interval"
-        },
-        "data_description": {
-          "step_interval": "Milliseconds between two steps. The bed only moves while steps keep arriving; the vendor app sends one every 300 to 350 ms.",
-          "move_steps": "How many steps one open or close runs before the bed stops by itself. Steps times interval is the longest a movement lasts.",
-          "position_steps": "The same for Flat and the stored positions, which need long enough to arrive.",
-          "idle_timeout": "Seconds without a command before the connection is closed. It frees the proxy's connection slot for other devices.",
-          "keepalive_interval": "Seconds between two PINs while connected. A locked bed drops the link after about 30 seconds without one."
-        }
-      }
-    }
-  },
   "entity": {
     "binary_sensor": {
       "connection": {
@@ -123,6 +102,23 @@
       "light": {
         "name": "Light"
       }
+    },
+    "number": {
+      "up_time": {
+        "name": "Run time up"
+      },
+      "down_time": {
+        "name": "Run time down"
+      },
+      "position_time": {
+        "name": "Run time flat or stored position"
+      },
+      "step_interval": {
+        "name": "Step interval"
+      },
+      "idle_timeout": {
+        "name": "Hang up after"
+      }
     }
   },
   "exceptions": {
@@ -140,6 +136,9 @@
     },
     "command_failed": {
       "message": "{name} did not take the command."
+    },
+    "features_unread": {
+      "message": "{name} did not list its motors and light. Retrying."
     }
   }
 }

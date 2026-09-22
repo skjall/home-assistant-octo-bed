@@ -51,7 +51,17 @@ def make(
         ADDRESS,
         pin,
         features_from_data(FEATURES),
-        Timings(**{**base.__dict__, "step_interval": 0.01, **timings}),
+        # A tenth of the configured times, so three steps take 30 ms.
+        Timings(
+            **{
+                **base.__dict__,
+                "step_interval": 0.01,
+                "up_time": 0.03,
+                "down_time": 0.03,
+                "position_time": 0.04,
+                **timings,
+            }
+        ),
     )
 
 
@@ -132,7 +142,7 @@ async def test_a_new_movement_replaces_the_running_one(
     hass: HomeAssistant, factory, bed: FakeBed
 ) -> None:
     """Opposite directions never run at the same time."""
-    coordinator = factory(move_steps=50)
+    coordinator = factory(up_time=0.5, down_time=0.5)
     await coordinator.async_move(MOTOR_HEAD, True)
     await coordinator.async_move(MOTOR_HEAD, False)
     assert coordinator.motion is not None and coordinator.motion.up is False
@@ -150,7 +160,7 @@ async def test_stop_without_a_connection_sends_nothing(
     assert bed.written == []
 
 
-async def test_flat_and_memory_run_the_position_steps(
+async def test_flat_and_memory_run_the_position_time(
     hass: HomeAssistant, coordinator: OctoBedCoordinator, bed: FakeBed
 ) -> None:
     """Both are held for the longer number of steps."""
@@ -235,7 +245,7 @@ async def test_the_bed_hanging_up_ends_everything(
     hass: HomeAssistant, factory, bed: FakeBed
 ) -> None:
     """A dropped link cancels the movement and the keepalive."""
-    coordinator = factory(move_steps=100)
+    coordinator = factory(up_time=1.0)
     await coordinator.async_move(MOTOR_HEAD, True)
     assert bed.disconnected_callback is not None
 
@@ -325,7 +335,7 @@ async def test_shutdown_stops_a_running_movement(
     hass: HomeAssistant, factory, bed: FakeBed
 ) -> None:
     """Unloading mid-movement stops the motors before hanging up."""
-    coordinator = factory(move_steps=100)
+    coordinator = factory(up_time=1.0)
     await coordinator.async_move(MOTOR_HEAD, True)
     await coordinator.async_shutdown()
     assert bed.written[-1] == protocol.stop()
@@ -375,7 +385,9 @@ async def test_out_of_range(hass: HomeAssistant, bed: FakeBed) -> None:
 
 async def test_probe_reads_the_features(hass: HomeAssistant, bed: FakeBed) -> None:
     """The setup flow learns motors, memories, light and the PIN."""
-    features = await async_probe(hass, ADDRESS, "Bed", PIN)
+    probe = await async_probe(hass, ADDRESS, "Bed", PIN)
+    features = probe.features
+    assert b"".join(probe.received).count(b"\x21\x71") == 5
     assert features.motor_count == 2
     assert features.memory_count == 2
     assert features.has_light
@@ -386,7 +398,7 @@ async def test_probe_reads_the_features(hass: HomeAssistant, bed: FakeBed) -> No
 
 async def test_probe_without_a_pin(hass: HomeAssistant, bed: FakeBed) -> None:
     """Without a PIN only the features are asked for."""
-    features = await async_probe(hass, ADDRESS, "Bed", None)
+    features = (await async_probe(hass, ADDRESS, "Bed", None)).features
     assert features.pin_set
     assert bed.written == [protocol.request_features()]
 
@@ -427,3 +439,21 @@ async def test_a_hang_up_that_never_returns(hass: HomeAssistant, bed: FakeBed) -
     bed.client.disconnect.side_effect = forever
     with patch(f"{MODULE}._DISCONNECT_TIMEOUT", 0.01):
         await async_probe(hass, ADDRESS, "Bed", None)
+
+
+async def test_up_and_down_have_their_own_run_time(
+    hass: HomeAssistant, factory, bed: FakeBed
+) -> None:
+    """Two steps up, five down, at the same interval."""
+    coordinator = factory(up_time=0.02, down_time=0.05)
+    await coordinator.async_move(MOTOR_HEAD, True)
+    await _settle(coordinator)
+    await coordinator.async_move(MOTOR_HEAD, False)
+    await _settle(coordinator)
+    assert bed.frames(protocol.move(MOTOR_HEAD, True)) == 2
+    assert bed.frames(protocol.move(MOTOR_HEAD, False)) == 5
+
+
+def test_a_run_time_shorter_than_a_step_is_one_step() -> None:
+    assert Timings.from_options({"up_time": 0.1}).steps(0.1) == 1
+    assert Timings.from_options({}).steps(15) == 50

@@ -49,7 +49,12 @@ frame sums to zero. Checked against all nine captured frames **[capture]**.
 **Escaping [app notes]:** between the delimiters, `40 → 3C 01`, `3C → 3C 02`,
 `4F → 3C 03`, `41 → 3C 04`, applied after the checksum. None of the frames this
 integration sends contains one of these bytes, which is why the captures show
-no escape. The reader undoes it on what the receiver sends.
+no escape. On what the receiver sends, the reader cuts frames by their length
+field first - smartbed-mqtt, which works with real receivers, reads replies
+that way and knows no escaping - and only falls back to the escaped form when
+that does not add up. Cutting at every 0x40 instead lost every record whose
+data or checksum happened to contain one; on the RC2 here that cost the motor
+count and the PIN record.
 
 ## Commands
 
@@ -98,14 +103,28 @@ id (3, big-endian) | flag | char_len | characteristic (char_len) | value type | 
 
 | Id | Meaning | Value |
 | --- | --- | --- |
-| `000001` | motor count | `value[0]` |
+| `000001` | motor count | the RC2 puts it in the characteristic and sends no value: `00 00 01 01 01 02 00` is two motors **[RC2 here]**; `value[0]` where a value is sent **[app notes]** |
 | `000002` | stored positions | `value[0]` |
 | `000003` | PIN | `value[0] == 1`: a PIN is set; `value[1] == 1`: unlocked |
 | `000004` | stored position kinds | one byte per slot |
+| `000010` | unknown; the RC2 sends `01 01 01 01 00` | - |
 | `000102` | light | present: there is one; `value[0]`: on |
 | `FFFFFF` | end of the listing | - |
 
 Source: smartbed-mqtt for the ids and the layout; app notes for `000004`.
+
+Both RC2 receivers here list exactly this, one frame per notification:
+
+```
+40 21 71 00 07 e2 00 00 01 01 01 02 00 40      motor count 2
+40 21 71 00 08 df 00 01 02 01 01 01 01 00 40   light, off
+40 21 71 00 08 d2 00 00 10 01 01 01 01 00 40   000010, unknown
+40 21 71 00 06 ea ff ff ff 01 00 00 40         end
+```
+
+No PIN record (no PIN set) and no stored positions. The listing is kept with
+the config entry and read again at every start, so a correction here reaches
+existing entries without a new connection.
 There are no position or status reports.
 
 ## Timing

@@ -127,3 +127,28 @@ async def test_unavailable_when_gone(
     coordinator.async_update_listeners()
     await asyncio.sleep(0)
     assert hass.states.get("cover.bed_head").state == STATE_UNAVAILABLE
+
+
+async def test_the_run_times_are_set_on_the_device(
+    hass: HomeAssistant, loaded: MockConfigEntry, bed: FakeBed
+) -> None:
+    """A new value is stored and used, without reloading the entry."""
+    coordinator = loaded.runtime_data
+    entity_id = "number.bed_run_time_up"
+    assert float(hass.states.get(entity_id).state) == 0.3
+
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {ATTR_ENTITY_ID: entity_id, "value": 20},
+        blocking=True,
+    )
+    assert loaded.options["up_time"] == 20
+    assert coordinator.timings.up_time == 20
+    assert loaded.runtime_data is coordinator
+    assert float(hass.states.get(entity_id).state) == 20
+
+    # Settings stay changeable while the bed is out of range.
+    coordinator._available = False
+    coordinator.async_update_listeners()
+    assert hass.states.get(entity_id).state != STATE_UNAVAILABLE

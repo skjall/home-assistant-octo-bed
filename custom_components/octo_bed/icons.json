@@ -43,6 +43,23 @@
           "on": "mdi:lightbulb-on"
         }
       }
+    },
+    "number": {
+      "up_time": {
+        "default": "mdi:arrow-up-bold-outline"
+      },
+      "down_time": {
+        "default": "mdi:arrow-down-bold-outline"
+      },
+      "position_time": {
+        "default": "mdi:bed-clock"
+      },
+      "step_interval": {
+        "default": "mdi:metronome"
+      },
+      "idle_timeout": {
+        "default": "mdi:timer-sand"
+      }
     }
   }
 }

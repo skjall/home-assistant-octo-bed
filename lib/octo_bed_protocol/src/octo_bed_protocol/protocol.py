@@ -139,8 +139,12 @@ class FrameReader:
     """Reassemble frames from notifications.
 
     A frame may be split across notifications, and one notification may carry
-    several frames. Anything that does not add up - a bad checksum, a length
-    that does not match - is dropped rather than guessed at.
+    several frames. Frames are cut by their length field first, which is how
+    smartbed-mqtt reads replies from real receivers: unescaped, so a 0x40
+    inside the data or the checksum is not a delimiter. Only a frame that does
+    not add up that way is tried again as the escaped form the app notes
+    describe. Anything that fits neither is
+    dropped rather than guessed at.
     """
 
     def __init__(self) -> None:
@@ -157,23 +161,53 @@ class FrameReader:
                 self._buffer.clear()
                 return packets
             del self._buffer[:start]
-            end = self._buffer.find(FRAME_DELIMITER, 1)
-            if end < 0:
+            taken = self._take()
+            if taken is _INCOMPLETE:
                 if len(self._buffer) > _MAX_FRAME:
                     self._buffer.clear()
                 return packets
-            raw = bytes(self._buffer[1:end])
-            del self._buffer[: end + 1]
-            if not raw:
-                # Two delimiters back to back: the second one opens the next
-                # frame, the first one closed nothing.
-                self._buffer[:0] = bytes((FRAME_DELIMITER,))
+            if taken is None:
+                # Not a frame that starts here; look for the next start.
+                del self._buffer[:1]
                 continue
-            if (packet := _decode(raw)) is not None:
-                packets.append(packet)
+            assert isinstance(taken, Packet)
+            packets.append(taken)
+
+    def _take(self) -> Packet | _Incomplete | None:
+        """Cut one frame off the front of the buffer, if one is complete."""
+        buffer = self._buffer
+        if len(buffer) < 7:
+            return _INCOMPLETE
+        total = 7 + int.from_bytes(buffer[3:5], "big")
+        if total > _MAX_FRAME:
+            return None
+        if len(buffer) < total:
+            # An escaped frame is longer than its length field says, never
+            # shorter, so it cannot be complete either.
+            return _INCOMPLETE
+        if buffer[total - 1] == FRAME_DELIMITER and not sum(buffer[:total]) & 0xFF:
+            packet = Packet(
+                command=bytes(buffer[1:3]), data=bytes(buffer[6 : total - 1])
+            )
+            del buffer[:total]
+            return packet
+        end = buffer.find(FRAME_DELIMITER, 1)
+        if end < 0:
+            return _INCOMPLETE
+        if (packet := _decode_escaped(bytes(buffer[1:end]))) is not None:
+            del buffer[: end + 1]
+            return packet
+        return None
 
 
-def _decode(raw: bytes) -> Packet | None:
+class _Incomplete:
+    """The frame at the front of the buffer has not fully arrived yet."""
+
+
+_INCOMPLETE = _Incomplete()
+
+
+def _decode_escaped(raw: bytes) -> Packet | None:
     body = _unescape(raw)
     if body is None or len(body) < 5:
         return None
@@ -183,6 +217,16 @@ def _decode(raw: bytes) -> Packet | None:
     if sum((FRAME_DELIMITER, *body, FRAME_DELIMITER)) & 0xFF:
         return None
     return Packet(command=body[:2], data=body[5:])
+
+
+def read_listing(chunks: list[bytes]) -> Features:
+    """Read the features out of a listing as it was received."""
+    reader = FrameReader()
+    features = Features()
+    for chunk in chunks:
+        for packet in reader.feed(chunk):
+            features.add(packet)
+    return features
 
 
 def pin_accepted(packet: Packet) -> bool | None:
@@ -212,12 +256,18 @@ class Features:
         data = packet.data
         feature = int.from_bytes(data[0:3], "big")
         # A flag, then a length-prefixed characteristic, then one byte of value
-        # type, then the value. Only the value matters for what is read here.
+        # type, then the value.
+        characteristic = data[5 : 5 + data[4]]
         value = data[6 + data[4] :]
         if feature == FEATURE_END:
             self.complete = True
-        elif feature == FEATURE_MOTOR_COUNT and value:
-            self.motor_count = value[0]
+        elif feature == FEATURE_MOTOR_COUNT:
+            # The RC2 carries the count in the characteristic and sends no
+            # value at all: 00 00 01 | 01 | 01 | 02 | 00. A value, where a
+            # receiver sends one, is what the app notes describe.
+            count = value or characteristic
+            if count:
+                self.motor_count = count[0]
         elif feature == FEATURE_MEMORY_COUNT and value:
             self.memory_count = value[0]
         elif feature == FEATURE_MEMORY_INFO:

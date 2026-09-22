@@ -33,13 +33,14 @@ from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
     CHAR_UUID,
+    CONF_DOWN_TIME,
     CONF_IDLE_TIMEOUT,
-    CONF_KEEPALIVE_INTERVAL,
-    CONF_MOVE_STEPS,
-    CONF_POSITION_STEPS,
+    CONF_POSITION_TIME,
     CONF_STEP_INTERVAL,
+    CONF_UP_TIME,
     DEFAULTS,
     DOMAIN,
+    KEEPALIVE_INTERVAL,
 )
 
 if TYPE_CHECKING:
@@ -66,30 +67,45 @@ class PinRejectedError(Exception):
     """The receiver said no to the PIN."""
 
 
+@dataclass
+class Probe:
+    """What one setup connection learned, and the bytes it learned it from."""
+
+    features: protocol.Features
+    # Every notification as received, so a listing that was misread can be
+    # read again from the diagnostics instead of from a new capture.
+    received: list[bytes]
+
+
 @dataclass(frozen=True)
 class Timings:
     """How movements are driven and how long a connection stays open."""
 
     step_interval: float
-    move_steps: int
-    position_steps: int
+    up_time: float
+    down_time: float
+    position_time: float
     idle_timeout: float
-    keepalive_interval: float
+    keepalive_interval: float = KEEPALIVE_INTERVAL
 
     @classmethod
     def from_options(cls, options: Mapping[str, Any]) -> Timings:
         """Read the timings from the entry options, defaults where absent."""
 
-        def get(key: str) -> int:
-            return int(options.get(key, DEFAULTS[key]))
+        def get(key: str) -> float:
+            return float(options.get(key, DEFAULTS[key]))
 
         return cls(
             step_interval=get(CONF_STEP_INTERVAL) / 1000,
-            move_steps=get(CONF_MOVE_STEPS),
-            position_steps=get(CONF_POSITION_STEPS),
-            idle_timeout=float(get(CONF_IDLE_TIMEOUT)),
-            keepalive_interval=float(get(CONF_KEEPALIVE_INTERVAL)),
+            up_time=get(CONF_UP_TIME),
+            down_time=get(CONF_DOWN_TIME),
+            position_time=get(CONF_POSITION_TIME),
+            idle_timeout=get(CONF_IDLE_TIMEOUT),
         )
+
+    def steps(self, seconds: float) -> int:
+        """Return how many steps fill a run time; always at least one."""
+        return max(1, round(seconds / self.step_interval))
 
 
 @dataclass(frozen=True)
@@ -166,7 +182,7 @@ async def _close(client: BleakClient) -> None:
 
 async def async_probe(
     hass: HomeAssistant, address: str, name: str, pin: str | None
-) -> protocol.Features:
+) -> Probe:
     """Connect once, ask the receiver what it has, try the PIN, hang up.
 
     Used by the setup flow, before an entry exists. Raises PinRejectedError
@@ -177,10 +193,13 @@ async def async_probe(
     device = _ble_device(hass, address)
     reader = protocol.FrameReader()
     features = protocol.Features()
+    received: list[bytes] = []
     listed = asyncio.Event()
     pin_reply: asyncio.Future[bool] = hass.loop.create_future()
 
     def on_notify(_: BleakGATTCharacteristic, data: bytearray) -> None:
+        _LOGGER.debug("%s: received %s", address, data.hex(" "))
+        received.append(bytes(data))
         for packet in reader.feed(bytes(data)):
             features.add(packet)
             if features.complete:
@@ -209,7 +228,7 @@ async def async_probe(
                         raise PinRejectedError
     finally:
         await _close(client)
-    return features
+    return Probe(features=features, received=received)
 
 
 class OctoBedCoordinator(PassiveBluetoothDataUpdateCoordinator):
@@ -341,6 +360,7 @@ class OctoBedCoordinator(PassiveBluetoothDataUpdateCoordinator):
 
     @callback
     def _on_notify(self, _: BleakGATTCharacteristic, data: bytearray) -> None:
+        _LOGGER.debug("%s: received %s", self.address, data.hex(" "))
         for packet in self._reader.feed(bytes(data)):
             accepted = protocol.pin_accepted(packet)
             if accepted is not None:
@@ -498,11 +518,12 @@ class OctoBedCoordinator(PassiveBluetoothDataUpdateCoordinator):
                 self.async_update_listeners()
 
     async def async_move(self, motors: int, up: bool) -> None:
-        """Run motors in one direction for the configured number of steps."""
+        """Run motors in one direction for that direction's run time."""
+        seconds = self.timings.up_time if up else self.timings.down_time
         await self._async_drive(
             Motion(motors=motors, up=up),
             protocol.move(motors, up),
-            self.timings.move_steps,
+            self.timings.steps(seconds),
         )
 
     async def async_flat(self) -> None:
@@ -511,7 +532,7 @@ class OctoBedCoordinator(PassiveBluetoothDataUpdateCoordinator):
         await self._async_drive(
             Motion(motors=motors, up=False),
             protocol.move(motors, False),
-            self.timings.position_steps,
+            self.timings.steps(self.timings.position_time),
         )
 
     async def async_recall_memory(self, slot: int) -> None:
@@ -519,7 +540,7 @@ class OctoBedCoordinator(PassiveBluetoothDataUpdateCoordinator):
         await self._async_drive(
             Motion(motors=0, memory=slot),
             protocol.recall_memory(slot),
-            self.timings.position_steps,
+            self.timings.steps(self.timings.position_time),
         )
 
     async def async_stop(self) -> None:
@@ -534,6 +555,18 @@ class OctoBedCoordinator(PassiveBluetoothDataUpdateCoordinator):
             return
         await self._async_command(protocol.stop())
         self._schedule_idle()
+        self.async_update_listeners()
+
+    @callback
+    def async_set_timing(self, key: str, value: float) -> None:
+        """Change one timing; it applies from the next movement on.
+
+        Stored in the entry options, so it survives a restart, but without
+        reloading the entry: that would drop a connection for nothing.
+        """
+        options = {**self.entry.options, key: value}
+        self.hass.config_entries.async_update_entry(self.entry, options=options)
+        self.timings = Timings.from_options(options)
         self.async_update_listeners()
 
     async def async_set_light(self, on: bool) -> None:

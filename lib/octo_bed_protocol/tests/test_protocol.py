@@ -13,6 +13,7 @@ from octo_bed_protocol import (
     move,
     pin,
     pin_accepted,
+    read_listing,
     recall_memory,
     request_features,
     set_light,
@@ -194,3 +195,69 @@ def test_pin_state_reply() -> None:
     assert pin_accepted(Packet(command=b"\x21\x43", data=b"\x00")) is False
     assert pin_accepted(Packet(command=b"\x21\x43", data=b"")) is False
     assert pin_accepted(Packet(command=b"\x21\x71", data=b"\x01")) is None
+
+
+def _unescaped(command: bytes, data: bytes) -> bytes:
+    """A frame the way the RC2 sends its replies: no escaping at all."""
+    body = bytearray(command) + len(data).to_bytes(2, "big") + b"\x00" + data
+    body[4] = (-(0x80 + sum(body))) & 0xFF
+    return bytes((0x40, *body, 0x40))
+
+
+def test_an_unescaped_delimiter_in_the_data_is_data() -> None:
+    record = bytes.fromhex("00 00 01 01 01 40 01 02")
+    frame = _unescaped(b"\x21\x71", record)
+    [packet] = FrameReader().feed(frame)
+    assert packet.data == record
+
+
+def test_an_unescaped_delimiter_as_checksum() -> None:
+    reader = FrameReader()
+    # Search a record whose checksum comes out as 0x40.
+    for value in range(256):
+        frame = _unescaped(b"\x21\x71", bytes((0, 0, 1, 1, 1, 1, 1, value)))
+        if frame[5] == 0x40:
+            break
+    else:  # pragma: no cover
+        raise AssertionError("no such record")
+    features = Features()
+    for packet in reader.feed(
+        frame + _unescaped(b"\x21\x71", bytes.fromhex("ff ff ff 00 00 00"))
+    ):
+        features.add(packet)
+    assert features.motor_count == value
+    assert features.complete
+
+
+def test_a_frame_split_before_its_length_is_known() -> None:
+    reader = FrameReader()
+    frame = _unescaped(b"\x21\x71", bytes.fromhex("00 00 01 01 01 01 01 02"))
+    assert reader.feed(frame[:3]) == []
+    assert reader.feed(frame[3:9]) == []
+    assert len(reader.feed(frame[9:])) == 1
+
+
+# The listing both RC2 receivers here sent, notification by notification.
+RC2_LISTING = [
+    bytes.fromhex("40 21 71 00 07 e2 00 00 01 01 01 02 00 40"),
+    bytes.fromhex("40 21 71 00 08 df 00 01 02 01 01 01 01 00 40"),
+    bytes.fromhex("40 21 71 00 08 d2 00 00 10 01 01 01 01 00 40"),
+    bytes.fromhex("40 21 71 00 06 ea ff ff ff 01 00 00 40"),
+]
+
+
+def test_the_rc2_listing() -> None:
+    """Two motors in the characteristic, a light that is off, no PIN."""
+    features = read_listing(RC2_LISTING)
+    assert features.complete
+    assert features.motor_count == 2
+    assert features.motor_mask() == MOTOR_HEAD | MOTOR_FEET
+    assert features.has_light
+    assert not features.light_on
+    assert not features.pin_set
+    assert features.memory_count == 0
+
+
+def test_a_motor_count_without_any_bytes() -> None:
+    frame = build_frame(b"\x21\x71", bytes.fromhex("00 00 01 01 00 00"))
+    assert read_listing([frame]).motor_count is None

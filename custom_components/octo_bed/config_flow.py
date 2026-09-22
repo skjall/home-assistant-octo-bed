@@ -12,19 +12,10 @@ from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
     async_discovered_service_info,
 )
-from homeassistant.config_entries import (
-    ConfigEntryState,
-    ConfigFlow,
-    ConfigFlowResult,
-    OptionsFlow,
-)
+from homeassistant.config_entries import ConfigEntryState, ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_ADDRESS
-from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.selector import (
-    NumberSelector,
-    NumberSelectorConfig,
-    NumberSelectorMode,
     TextSelector,
     TextSelectorConfig,
     TextSelectorType,
@@ -34,32 +25,18 @@ from . import OctoBedConfigEntry
 from .const import (
     ADVERTISED_SERVICE_UUID,
     CONF_FEATURES,
-    CONF_IDLE_TIMEOUT,
-    CONF_KEEPALIVE_INTERVAL,
-    CONF_MOVE_STEPS,
+    CONF_LISTING,
     CONF_PIN,
-    CONF_POSITION_STEPS,
-    CONF_STEP_INTERVAL,
-    DEFAULTS,
     DOMAIN,
-    LIMITS,
     NAME_PREFIXES,
     SERVICE_UUID,
 )
-from .coordinator import PinRejectedError, async_probe, features_to_data
+from .coordinator import PinRejectedError, Probe, async_probe, features_to_data
 
 _LOGGER = logging.getLogger(__name__)
 
 PIN_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
 PIN_SCHEMA = vol.Schema({vol.Required(CONF_PIN): PIN_SELECTOR})
-
-TIMINGS = (
-    CONF_STEP_INTERVAL,
-    CONF_MOVE_STEPS,
-    CONF_POSITION_STEPS,
-    CONF_IDLE_TIMEOUT,
-    CONF_KEEPALIVE_INTERVAL,
-)
 
 
 def is_octo(info: BluetoothServiceInfoBleak) -> bool:
@@ -93,12 +70,13 @@ class OctoBedConfigFlow(ConfigFlow, domain=DOMAIN):
         self._address: str | None = None
         self._title: str | None = None
         self._features: protocol.Features | None = None
+        self._received: list[bytes] = []
 
     async def _async_probe(self, pin: str | None) -> str | None:
         """Talk to the bed. Returns an error key, or None on success."""
         assert self._address is not None
         try:
-            self._features = await async_probe(
+            probe: Probe = await async_probe(
                 self.hass, self._address, self._title or self._address, pin
             )
         except PinRejectedError:
@@ -111,15 +89,21 @@ class OctoBedConfigFlow(ConfigFlow, domain=DOMAIN):
         except Exception:
             _LOGGER.exception("Unexpected error while talking to the bed")
             return "cannot_connect"
+        self._features = probe.features
+        self._received = probe.received
         if not self._features.motor_count and not self._features.has_light:
             return "no_features"
         return None
+
+    def _listing(self) -> list[str]:
+        return [chunk.hex(" ") for chunk in self._received]
 
     def _create(self, pin: str | None) -> ConfigFlowResult:
         assert self._address is not None and self._features is not None
         data: dict[str, Any] = {
             CONF_ADDRESS: self._address,
             CONF_FEATURES: features_to_data(self._features),
+            CONF_LISTING: self._listing(),
         }
         if pin:
             data[CONF_PIN] = pin
@@ -237,6 +221,7 @@ class OctoBedConfigFlow(ConfigFlow, domain=DOMAIN):
                     data_updates={
                         CONF_PIN: pin,
                         CONF_FEATURES: features_to_data(self._features),
+                        CONF_LISTING: self._listing(),
                     },
                 )
         return self.async_show_form(
@@ -273,6 +258,7 @@ class OctoBedConfigFlow(ConfigFlow, domain=DOMAIN):
                     data = {
                         CONF_ADDRESS: self._address,
                         CONF_FEATURES: features_to_data(self._features),
+                        CONF_LISTING: self._listing(),
                     }
                     if pin:
                         data[CONF_PIN] = pin
@@ -291,42 +277,7 @@ class OctoBedConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders={"name": entry.title},
         )
 
-    @staticmethod
-    @callback
-    def async_get_options_flow(config_entry: OctoBedConfigEntry) -> OptionsFlow:
-        """Return the options flow."""
-        return OctoBedOptionsFlow()
-
 
 def _pin_format_error(pin: str) -> str | None:
     """Catch a PIN that cannot be right before connecting for it."""
     return None if len(pin) == 4 and pin.isdigit() else "invalid_pin_format"
-
-
-class OctoBedOptionsFlow(OptionsFlow):
-    """How movements are driven and how long a connection stays open."""
-
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Manage the timings."""
-        if user_input is not None:
-            return self.async_create_entry(
-                data={key: int(value) for key, value in user_input.items()}
-            )
-
-        options = self.config_entry.options
-        schema: dict[Any, Any] = {}
-        for key in TIMINGS:
-            minimum, maximum, step = LIMITS[key]
-            schema[vol.Required(key, default=options.get(key, DEFAULTS[key]))] = (
-                NumberSelector(
-                    NumberSelectorConfig(
-                        min=minimum,
-                        max=maximum,
-                        step=step,
-                        mode=NumberSelectorMode.BOX,
-                    )
-                )
-            )
-        return self.async_show_form(step_id="init", data_schema=vol.Schema(schema))
